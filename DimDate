@@ -1,0 +1,237 @@
+--SELECT * FROM DimDate
+
+-- =============================================
+-- Author:		Vicky Pandit
+-- Create date: September 16, 2022
+-- Description:	Populates the Date dimension table
+-- =============================================
+ALTER PROCEDURE [dbo].[etl_PopulateDateDimension]
+(
+	-- Date range
+	@StartDate DATETIME = '1990-01-01'
+	,@EndDate DATETIME = '2050-12-31'
+)
+AS
+BEGIN
+	-- SET NOCOUNT ON added to prevent extra result sets from
+	-- interfering with SELECT statements.
+	SET NOCOUNT ON;
+	
+	BEGIN TRY
+		DROP TABLE [dbo].[DimDate]
+	END TRY
+
+	BEGIN CATCH
+		/*No Action*/
+	END CATCH
+
+	/**********************************************************************************/
+
+	CREATE TABLE	[dbo].[DimDate]
+		(	[DateKey] INT NOT NULL,
+			[Date] DATE NOT NULL,
+			--[FullDateUK] CHAR(10) NOT NULL, -- Date in dd-MM-yyyy format
+			--[FullDateUSA] CHAR(10) NOT NULL,-- Date in MM-dd-yyyy format
+			[DayOfMonth] TINYINT NOT NULL, -- Field will hold day number of Month
+			[DaySuffix] VARCHAR(4) NOT NULL, -- Apply suffix as 1st, 2nd ,3rd etc
+			[DayName] VARCHAR(9) NOT NULL, -- Contains name of the day, Sunday, Monday 
+			[DayOfWeek] TINYINT NOT NULL,-- First Day Monday=1 and Sunday=7
+			[DayOfWeekUSA] TINYINT NOT NULL,-- First Day Sunday=1 and Saturday=7
+			[RunningCountOfDayInMonth] TINYINT NOT NULL, --1st Monday or 2nd Monday in Month
+			[RunningCountOfDayInYear] TINYINT NOT NULL,
+			[RunningCountOfDayInQuarter] TINYINT NOT NULL,
+			[DayOfYear] SMALLINT NOT NULL,
+			[WeekOfMonth] TINYINT NOT NULL,-- Week Number of Month 
+			[WeekOfQuarter] TINYINT NOT NULL, --Week Number of the Quarter
+			[WeekOfYear] TINYINT NOT NULL,--Week Number of the Year
+			[Month] TINYINT NOT NULL, --Number of the Month 1 to 12
+			[MonthName] VARCHAR(9) NOT NULL,--January, February etc
+			[MonthOfQuarter] TINYINT NOT NULL,-- Month Number belongs to Quarter
+			[Quarter] TINYINT NOT NULL,
+			[QuarterName] VARCHAR(9) NOT NULL,--First,Second..
+			[Year] SMALLINT NOT NULL,-- Year value of Date stored in Row
+			[YearName] CHAR(7) NOT NULL, --CY 2012,CY 2013
+			--[MonthYear] CHAR(10) NOT NULL, --Jan-2013,Feb-2013
+			[YYYYMM] CHAR(6) NOT NULL,
+			[MMYYYY] CHAR(6) NOT NULL,
+			[FirstDayOfWeekInYear] DATE NOT NULL,
+			[LastDayOfWeekInYear] DATE NOT NULL,
+			[FirstDayOfWeek] DATE NOT NULL,
+			[LastDayOfWeek] DATE NOT NULL,
+			[FirstDayOfMonth] DATE NOT NULL,
+			[LastDayOfMonth] DATE NOT NULL,
+			[FirstDayOfQuarter] DATE NOT NULL,
+			[LastDayOfQuarter] DATE NOT NULL,
+			[FirstDayOfYear] DATE NOT NULL,
+			[LastDayOfYear] DATE NOT NULL,
+			[IsWeekday] BIT NOT NULL-- 0=Week End ,1=Week Day
+		)
+
+
+	/********************************************************************************************/
+	--Specify Start Date and End date here
+	--Value of Start Date Must be Less than Your End Date 
+
+	--DECLARE @StartDate DATETIME = '01/01/2000' --Starting value of Date Range
+	--DECLARE @EndDate DATETIME = '01/01/2020' --End Value of Date Range
+
+	SET DATEFIRST 1
+
+	--Temporary Variables To Hold the Values During Processing of Each Date of Year
+	DECLARE
+		@DayOfWeekInMonth INT,
+		@DayOfWeekInYear INT,
+		@DayOfQuarter INT,
+		@WeekOfMonth INT,
+		@CurrentYear INT,
+		@CurrentMonth INT,
+		@CurrentQuarter INT
+
+	/*Table Data type to store the day of week count for the month and year*/
+	DECLARE @DayOfWeek TABLE (DOW INT, MonthCount INT, QuarterCount INT, YearCount INT)
+
+	INSERT INTO @DayOfWeek VALUES (1, 0, 0, 0)
+	INSERT INTO @DayOfWeek VALUES (2, 0, 0, 0)
+	INSERT INTO @DayOfWeek VALUES (3, 0, 0, 0)
+	INSERT INTO @DayOfWeek VALUES (4, 0, 0, 0)
+	INSERT INTO @DayOfWeek VALUES (5, 0, 0, 0)
+	INSERT INTO @DayOfWeek VALUES (6, 0, 0, 0)
+	INSERT INTO @DayOfWeek VALUES (7, 0, 0, 0)
+
+	--Extract and assign various parts of Values from Current Date to Variable
+
+	DECLARE @CurrentDate AS DATETIME = @StartDate
+	SET @CurrentMonth = DATEPART(MONTH, @CurrentDate)
+	SET @CurrentYear = DATEPART(YEAR, @CurrentDate)
+	SET @CurrentQuarter = DATEPART(QUARTER, @CurrentDate)
+
+	/********************************************************************************************/
+	--Proceed only if Start Date(Current date ) is less than End date you specified above
+
+	WHILE @CurrentDate < @EndDate
+	BEGIN
+ 
+		/*Begin day of week logic*/
+
+		/*Check for Change in Month of the Current date if Month changed then 
+		Change variable value*/
+		IF @CurrentMonth != DATEPART(MONTH, @CurrentDate) 
+		BEGIN
+			UPDATE @DayOfWeek
+			SET MonthCount = 0
+			SET @CurrentMonth = DATEPART(MONTH, @CurrentDate)
+		END
+
+		/* Check for Change in Quarter of the Current date if Quarter changed then change 
+			Variable value*/
+
+		IF @CurrentQuarter != DATEPART(QUARTER, @CurrentDate)
+		BEGIN
+			UPDATE @DayOfWeek
+			SET QuarterCount = 0
+			SET @CurrentQuarter = DATEPART(QUARTER, @CurrentDate)
+		END
+       
+		/* Check for Change in Year of the Current date if Year changed then change 
+			Variable value*/
+	
+
+		IF @CurrentYear != DATEPART(YEAR, @CurrentDate)
+		BEGIN
+			UPDATE @DayOfWeek
+			SET YearCount = 0
+			SET @CurrentYear = DATEPART(YEAR, @CurrentDate)
+		END
+	
+		-- Set values in table data type created above from variables 
+
+		UPDATE @DayOfWeek
+		SET 
+			MonthCount = MonthCount + 1,
+			QuarterCount = QuarterCount + 1,
+			YearCount = YearCount + 1
+		WHERE DOW = DATEPART(WEEKDAY, @CurrentDate)
+
+		SELECT
+			@DayOfWeekInMonth = MonthCount,
+			@DayOfQuarter = QuarterCount,
+			@DayOfWeekInYear = YearCount
+		FROM @DayOfWeek
+		WHERE DOW = DATEPART(WEEKDAY, @CurrentDate)
+	
+		/*End day of week logic*/
+
+
+		/* Populate Your Dimension Table with values*/
+	
+		INSERT INTO [dbo].[DimDate]
+		SELECT		CONVERT (CHAR(8),@CurrentDate,112)																					AS DateKey
+					,@CurrentDate																										AS Date
+					--CONVERT (char(10),@CurrentDate,103) as FullDateUK,
+					--CONVERT (char(10),@CurrentDate,101) as FullDateUSA,
+					,DATEPART(DAY, @CurrentDate)																						AS DayOfMonth
+					,CASE 
+						WHEN DATEPART(DAY,@CurrentDate) IN (11,12,13) THEN CAST(DATEPART(DAY,@CurrentDate) AS VARCHAR) + 'th'
+						WHEN RIGHT(DATEPART(DAY,@CurrentDate),1) = 1 THEN CAST(DATEPART(DAY,@CurrentDate) AS VARCHAR) + 'st'
+						WHEN RIGHT(DATEPART(DAY,@CurrentDate),1) = 2 THEN CAST(DATEPART(DAY,@CurrentDate) AS VARCHAR) + 'nd'
+						WHEN RIGHT(DATEPART(DAY,@CurrentDate),1) = 3 THEN CAST(DATEPART(DAY,@CurrentDate) AS VARCHAR) + 'rd'
+						ELSE CAST(DATEPART(DAY,@CurrentDate) AS VARCHAR) + 'th' 
+					END																													AS DaySuffix
+					,DATENAME(WEEKDAY, @CurrentDate)																					AS DayName
+					,DATEPART(WEEKDAY, @CurrentDate)																					AS DayOfWeek
+					,CASE WHEN DATEPART(WEEKDAY, @CurrentDate) = 7 THEN 1 ELSE DATEPART(WEEKDAY, @CurrentDate) + 1 END					AS DayOfWeekUSA
+					,@DayOfWeekInMonth																									AS RunningCountOfDayInMonth
+					,@DayOfWeekInYear																									AS RunningCountOfDayInYear
+					,@DayOfQuarter																										AS RunningCountOfDayInQuarter
+					,DATEPART(DAYOFYEAR, @CurrentDate)																					AS DayOfYear
+					,DATEPART(WEEK, @CurrentDate) - DATEPART(WEEK, DATEADD(MONTH, DATEDIFF(MONTH, 0, @CurrentDate), 0)) + 1				AS WeekOfMonth
+					,DATEPART(WEEK, @CurrentDate) - DATEPART(WEEK, DATEADD(QUARTER, DATEDIFF(QUARTER, 0, @CurrentDate), 0)) + 1			AS WeekOfQuarter
+					--DATEPART(WEEK, @CurrentDate) + 1 - DATEPART(WEEK, CONVERT(VARCHAR, DATEPART(MONTH, @CurrentDate)) + '/1/' + CONVERT(VARCHAR, DATEPART(YEAR, @CurrentDate))) AS WeekOfMonth,
+					--(DATEDIFF(DD, DATEADD(QQ, DATEDIFF(QQ, 0, @CurrentDate), 0), @CurrentDate) / 7) + 1 AS WeekOfQuarter,
+					,DATEPART(WEEK, @CurrentDate)																						AS WeekOfYear
+					,DATEPART(MONTH, @CurrentDate)																						AS Month
+					,DATENAME(MONTH, @CurrentDate)																						AS MonthName
+					,CASE
+						WHEN DATEPART(MONTH, @CurrentDate) IN (1, 4, 7, 10) THEN 1
+						WHEN DATEPART(MONTH, @CurrentDate) IN (2, 5, 8, 11) THEN 2
+						WHEN DATEPART(MONTH, @CurrentDate) IN (3, 6, 9, 12) THEN 3
+					END																													AS MonthOfQuarter
+					,DATEPART(QUARTER, @CurrentDate)																					AS Quarter
+					,CASE DATEPART(QQ, @CurrentDate)
+						WHEN 1 THEN 'First'
+						WHEN 2 THEN 'Second'
+						WHEN 3 THEN 'Third'
+						WHEN 4 THEN 'Fourth'
+					END																													AS QuarterName
+					,DATEPART(YEAR, @CurrentDate)																						AS Year
+					,'CY ' + CONVERT(VARCHAR, DATEPART(YEAR, @CurrentDate))																AS YearName
+					,CONVERT(VARCHAR, DATEPART(YEAR, @CurrentDate)) + RIGHT('0' + CONVERT(VARCHAR, DATEPART(MONTH, @CurrentDate)), 2)	AS YYYYMM
+					,RIGHT('0' + CONVERT(VARCHAR, DATEPART(MONTH, @CurrentDate)), 2) + CONVERT(VARCHAR, DATEPART(YEAR, @CurrentDate))	AS MMYYYY
+					,CASE
+						-- The first day of the first week has to be capped by the first day of the year as counting weeks from the first ever Monday might give a date in the previous year
+						WHEN DATEADD(WEEK, DATEDIFF(WEEK, 0, DATEADD(DAY, -1, @CurrentDate)), 0) < DATEADD(YEAR, DATEDIFF(YEAR, 0, @CurrentDate), 0) THEN DATEADD(YEAR, DATEDIFF(YEAR, 0, @CurrentDate), 0)
+						ELSE DATEADD(WEEK, DATEDIFF(WEEK, 0, DATEADD(DAY, -1, @CurrentDate)), 0)
+					END																													AS FirstDayOfWeekInYear
+					,CASE
+						-- The last day of the last week has to be capped by the last day of the year as counting weeks from the first ever Sunday might give a date in the following year
+						WHEN DATEADD(WEEK, DATEDIFF(WEEK, 0, DATEADD(DAY, -1, @CurrentDate)) + 1, -1) > DATEADD(YEAR, DATEDIFF(YEAR, 0, @CurrentDate) + 1, -1) THEN DATEADD(YEAR, DATEDIFF(YEAR, 0, @CurrentDate) + 1, -1)
+						ELSE DATEADD(WEEK, DATEDIFF(WEEK, 0, DATEADD(DAY, -1, @CurrentDate)) + 1, -1)
+					END																													AS LastDayOfWeekInYear
+					,DATEADD(WEEK, DATEDIFF(WEEK, 0, DATEADD(DAY, -1, @CurrentDate)), 0)												AS FirstDayOfWeek
+					,DATEADD(WEEK, DATEDIFF(WEEK, 0, DATEADD(DAY, -1, @CurrentDate)) + 1, -1)											AS LastDayOfWeek
+					,DATEADD(MONTH, DATEDIFF(MONTH, 0, @CurrentDate), 0)																AS FirstDayOfMonth
+					,DATEADD(MONTH, DATEDIFF(MONTH, 0, @CurrentDate) + 1, -1)															AS LastDayOfMonth
+					,DATEADD(QUARTER, DATEDIFF(QUARTER, 0, @CurrentDate), 0)															AS FirstDayOfQuarter
+					,DATEADD(QUARTER, DATEDIFF(QUARTER, 0, @CurrentDate) + 1, -1)														AS LastDayOfQuarter
+					,DATEADD(YEAR, DATEDIFF(YEAR, 0, @CurrentDate), 0)																	AS FirstDayOfYear
+					,DATEADD(YEAR, DATEDIFF(YEAR, 0, @CurrentDate) + 1, -1)																AS LastDayOfYear
+					,CASE WHEN DATEPART(WEEKDAY, @CurrentDate) IN (1, 7) THEN 0 ELSE 1 END												AS IsWeekday
+
+		SET @CurrentDate = DATEADD(DAY, 1, @CurrentDate)
+	END
+
+	/********************************************************************************************/
+
+	ALTER TABLE [dbo].[DimDate] ADD CONSTRAINT PK_DimDate_Date PRIMARY KEY CLUSTERED ([Date] ASC)
+
+END
