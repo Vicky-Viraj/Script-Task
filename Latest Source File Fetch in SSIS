@@ -1,0 +1,15 @@
+  var directory= new DirectoryInfo(Dts.Variables["User::VarFolderPath"].Value.ToString());
+                     
+            FileInfo[] files = directory.GetFiles();
+            DateTime lastModified = DateTime.MinValue;
+
+            foreach (FileInfo file in files)
+            {
+                if (file.LastWriteTime > lastModified)
+                {
+                    lastModified = file.LastWriteTime;
+                    Dts.Variables["User::VarFileName"].Value = file.ToString();
+                }
+            }
+
+            MessageBox.Show(Dts.Variables["User::VarFileName"].Value.ToString());
