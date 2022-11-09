@@ -5,3 +5,6 @@
 
             Dts.TaskResult = (int)ScriptResults.Success;
 		}
+
+
+(DT_STR,50,1252)@[User::FileName]
