@@ -1,0 +1,7 @@
+		{
+            // TODO: Add your code here
+
+            Dts.Variables["FileName"].Value = System.IO.Path.GetFileName(Dts.Variables["FilePath"].Value.ToString());
+
+            Dts.TaskResult = (int)ScriptResults.Success;
+		}
